@@ -6,14 +6,14 @@ def readme():
         return f.read()
 
 
-setup(name='aclib',
-      version='0.2.4',
-      description='The Alphacruncher python library',
+setup(name='nuvolos',
+      version='0.2.5',
+      description='The Nuvolos python library for database connectivity',
       long_description=readme(),
-      url='https://github.com/datahub-ac/python-connector',
+      url='https://github.com/nuvolos-cloud/python-connector',
       author='Alphacruncher',
-      author_email='support@alphacruncher.com',
+      author_email='support@nuvolos.cloud',
       license='MIT',
-      packages=['aclib'],
+      packages=['snowflake'],
       install_requires=["snowflake-sqlalchemy"],
       zip_safe=False)
