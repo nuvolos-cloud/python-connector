@@ -34,32 +34,44 @@ def get_dbpath():
 
 
 def get_url(username = None, password = None, dbname=None, schemaname=None):
-    username_filename = os.getenv("ACLIB_USERNAME_FILENAME", "/secrets/username")
-    snowflake_access_token_filename = os.getenv("ACLIB_SNOWFLAKE_ACCESSS_TOKEN_FILENAME",  "/secrets/snowflake_access_token")
-    if not os.path.exists(username_filename) or not os.path.exists(snowflake_access_token_filename):
-        raise FileNotFoundError(f"It seems you are not")
-        # Create engine with credentials
-        cred = ConfigParser(interpolation=None)
-        cred.read(credential_filename)
-        credd = dict(cred.items(credential_section))
-        snowflake_host = credd.get('host', "alphacruncher.eu-central-1")
-        url = 'snowflake://' + credd['uid'] + ':' + credd['pwd'] + '@' + snowflake_host + '/?warehouse=' + credd['uid']
-        masked_url = 'snowflake://' + credd['uid'] + ':********' + '@' + snowflake_host + '/?warehouse=' + credd['uid']
+    if username is None and password is None:
+        username_filename = os.getenv("ACLIB_USERNAME_FILENAME", "/secrets/username")
+        snowflake_access_token_filename = os.getenv("ACLIB_SNOWFLAKE_ACCESSS_TOKEN_FILENAME",  "/secrets/snowflake_access_token")
+        if not os.path.exists(username_filename) or not os.path.exists(snowflake_access_token_filename):
+            raise FileNotFoundError(f"It seems you are not in Nuvolos. Please provide both a username and password argument to this function. If you are in Nuvolos, please contact support.")
+        else:
+            with open(username_filename) as username, open(snowflake_access_token_filename) as access_token:
+                cred_username = username.readline()
+                cred_snowflake_access_token = access_token.readline()
+            credd = {'username': cred_username}
+            credd['snowflake_access_token'] = cred_snowflake_access_token
+            snowflake_host = os.getenv("ACLIB_SNOWFLAKE_HOST", "alphacruncher.eu-central-1")
+            url = 'snowflake://' + credd['username'] + ':' + credd[
+                'snowflake_access_token'] + '@' + snowflake_host + '/?warehouse=' + credd['username']
+            masked_url = 'snowflake://' + credd['username'] + ':********' + '@' + snowflake_host + '/?warehouse=' + credd[
+                'username']
+    elif username is not None and password is None:
+        raise Exception("You have provided a username but not a password. Please either provide both arguments or leave both arguments empty.")
+    elif username is None and password is not None:
+        raise Exception("You have provided a password but not a username. Please either provide both arguments or leave both arguments empty.")
     else:
-        with open(username_filename) as username, open(snowflake_access_token_filename) as access_token:
-            cred_username = username.readline()
-            cred_snowflake_access_token = access_token.readline()
-        credd = {'username': cred_username}
-        credd['snowflake_access_token'] = cred_snowflake_access_token
+        credd = {'username': username}
+        credd['snowflake_access_token'] = password
         snowflake_host = os.getenv("ACLIB_SNOWFLAKE_HOST", "alphacruncher.eu-central-1")
-        url = 'snowflake://' + credd['username'] + ':' + credd[
-            'snowflake_access_token'] + '@' + snowflake_host + '/?warehouse=' + credd['username']
-        masked_url = 'snowflake://' + credd['username'] + ':********' + '@' + snowflake_host + '/?warehouse=' + credd[
-            'username']
-
-    app_db_name, app_schema_name = get_dbpath()
-    db_name = db_name or app_db_name
-    schema_name = schema_name or app_schema_name
+        url = 'snowflake://' + credd['username'] + ':' + \
+                credd['snowflake_access_token'] + '@' + snowflake_host + '/?warehouse=' + credd['username']
+        masked_url = 'snowflake://' + credd['username'] + ':' + \
+                '********' + '@' + snowflake_host + '/?warehouse=' + credd['username']
+    if dbname is None and schemaname is None:
+        db_name, schema_name = get_dbpath()
+    elif dbname is not None and schemaname is None:
+        raise Exception("You have provided a dbname argument but not a schemaname argument. Please either provide both or provide none of them.")
+    elif dbname is None and schemaname is not None:
+        raise Exception("You have provided a schemaname argument but not a dbname argument. Please either provide both or provide none of them.")
+    else:
+        db_name = dbname
+        schema_name = schemaname
+    
     if db_name:
         url = url + '&database=' + db_name
         masked_url = masked_url + '&database=' + db_name
@@ -71,8 +83,9 @@ def get_url(username = None, password = None, dbname=None, schemaname=None):
 
 
 def get_engine(username = None, password = None, dbname = None, schemaname = None):
-    return engine_from_config({'sqlalchemy.url': get_url(dbname, schemaname), 'sqlalchemy.echo': False})
+    return engine_from_config({'sqlalchemy.url': get_url(username, password, dbname, schemaname), 'sqlalchemy.echo': False})
 
 def get_connection(username = None, password = None, db_name = None, schema_name = None):
-
+    loc_eng = get_engine(username, password, dbname, schemaname)
+    return loc_eng.connect()
     
