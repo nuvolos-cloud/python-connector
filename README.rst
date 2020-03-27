@@ -16,7 +16,7 @@ The library provides two convenience functions for connecting to the remote data
 2. If you are running python from a non-Nuvolos application (e.g. your own computer), you have to provide four arguments: your username, your database password, the database and schema of the dataset you want to connect to. This information can be found in the Connection guide in the Nuvolos UI. 
 
 Using in Nuvolos applications
-============================
+=============================
 
 You can get the SQLAlchemy connection string or create an SQLAlchemy engine directly, or even obtain a SQLAlchemy connection object from an engine:
 
@@ -29,8 +29,6 @@ You can get the SQLAlchemy connection string or create an SQLAlchemy engine dire
     'snowflake://<username>:<password>@alphacruncher.eu-central-1/?warehouse=<username>&database=db_name&schema=schema_name'
     >>> eng = get_engine()
     >>> con = get_connection()
-
-::
 
 In general, we suggest using :code:`get_connection()` to obtain a SQLAlchemy connection that you can execute statements with.
 
@@ -46,5 +44,3 @@ You can get the SQLALchemy connection string, SQLAlchemy engine or SQLAlchemy co
    'snowflake://username:password@alphacruncher.eu-central-1/?warehouse=username&database=dbname&schema=schemaname'
    >>> eng = get_engine(username="username", password = "password", dbname = "dbname", schemaname="schemaname")
    >>> con = get_connection(username="username", password = "password", dbname = "dbname", schemaname="schemaname")
-
-::
