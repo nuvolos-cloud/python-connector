@@ -14,6 +14,6 @@ setup(name='nuvolos',
       author='Alphacruncher',
       author_email='support@nuvolos.cloud',
       license='MIT',
-      packages=['snowflake'],
+      packages=['nuvolos'],
       install_requires=["snowflake-sqlalchemy"],
       zip_safe=False)
