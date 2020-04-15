@@ -120,7 +120,7 @@ def get_url(username=None, password=None, dbname=None, schemaname=None):
 
     default_snowflake_host = (
         "acstg.eu-central-1"
-        if db_name is not None and db_name.startswith("STAGING/")
+        if db_name is not None and "STAGING/" in db_name
         else "alphacruncher.eu-central-1"
     )
     snowflake_host = os.getenv("NUVOLOS_SNOWFLAKE_HOST", default_snowflake_host)
