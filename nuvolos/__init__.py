@@ -42,14 +42,23 @@ def credd_from_odbc_ini():
 def get_dbpath():
     path_filename = os.getenv("NUVOLOS_DBPATH_FILE", "/lifecycle/.dbpath")
     if not os.path.exists(path_filename):
-        logger.debug(f"Could not find dbpath file {path_filename}.")
-        return None, None
+        logger.debug(
+            f"Could not find dbpath file {path_filename}, looking at ~/.dbpath instead"
+        )
+        path_filename = os.path.expanduser("~") + "/.dbpath"
+        if not os.path.exists(path_filename):
+            logger.debug(f"Could not find dbpath file {path_filename}")
+            return None, None
     with open(path_filename, "r") as path_file:
         lines = path_file.readlines()
         if len(lines) == 0:
             logger.debug(f"Could not parse dbpath file: {path_filename} is empty.")
             return None, None
         first_line = lines[0].rstrip()
+        if "Tables are not enabled" in first_line:
+            raise Exception(
+                f"Tables are not enabled for this space, please enable them first"
+            )
         # Split at "." character
         # This should have resulted in two substrings
         split_arr = re.split('"."', first_line)
