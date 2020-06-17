@@ -8,7 +8,7 @@ def readme():
 
 setup(
     name="nuvolos",
-    version="0.2.8",
+    version="0.2.9",
     description="The Nuvolos python library for database connectivity",
     long_description=readme(),
     url="https://github.com/nuvolos-cloud/python-connector",
