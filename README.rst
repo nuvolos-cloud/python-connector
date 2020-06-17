@@ -24,9 +24,9 @@ You can get the SQLAlchemy connection string or create an SQLAlchemy engine dire
 
     >>> from nuvolos import get_url, get_engine, get_connection
     >>> get_url()
-    'snowflake://<username>:<password>@alphacruncher.eu-central-1/?warehouse=<username>'
-    >>> get_url("db_name","schema_name")
-    'snowflake://<username>:<password>@alphacruncher.eu-central-1/?warehouse=<username>&database=db_name&schema=schema_name'
+    'snowflake://<username>:<password>@alphacruncher.eu-central-1/?database=%22<dbname>%22&schema=%22<schemaname>%22'
+    >>> get_url(username="abc", password="def", dbname="db_name", schemaname="schema_name")
+    'snowflake://abc:def@alphacruncher.eu-central-1/&database=db_name&schema=schema_name'
     >>> eng = get_engine()
     >>> con = get_connection()
 
@@ -35,12 +35,28 @@ In general, we suggest using :code:`get_connection()` to obtain a SQLAlchemy con
 Using in non-Nuvolos applications
 ==================================
 
-You can get the SQLALchemy connection string, SQLAlchemy engine or SQLAlchemy connection as with Nuvolos, however you will always have to provide all four arguments:
+You can get the SQLALchemy connection string, SQLAlchemy engine or SQLAlchemy connection as with Nuvolos, however you will have to provide all four arguments:
 
 ::
 
    >>> from nuvolos import get_url, get_engine, get_connection
    >>> get_url(username="username", password = "password", dbname = "dbname", schemaname="schemaname")
-   'snowflake://username:password@alphacruncher.eu-central-1/?warehouse=username&database=dbname&schema=schemaname'
+   'snowflake://username:password@alphacruncher.eu-central-1/?database=%22dbname%22&schema=%22schemaname%22'
    >>> eng = get_engine(username="username", password = "password", dbname = "dbname", schemaname="schemaname")
    >>> con = get_connection(username="username", password = "password", dbname = "dbname", schemaname="schemaname")
+
+You can provide defaults for the above parameters by creating special files.
+To avoid typing your username and password directly into your python scripts, you can create a :code:`.odbc.ini` file in your home folder with the following structure:
+
+::
+
+    [nuvolos]
+    uid = <username>
+    pwd = <password>
+
+To specify the database and schema, you can create a :code:`.dbpath` file in the working directory of your python script
+with the contents
+
+::
+
+    "<db_name>"."<schema_name>"
