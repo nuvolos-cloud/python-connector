@@ -8,6 +8,27 @@ from urllib.parse import quote
 logger = logging.getLogger(__name__)
 
 
+def load_env_var(env_var_name, description, print_value=False):
+    var = os.getenv(env_var_name)
+    if var is None:
+        logger.debug(f"Could not find {description} in env var {env_var_name}")
+    else:
+        if print_value:
+            logger.debug(f"Found {description} {var} in env var {env_var_name}")
+        else:
+            logger.debug(f"Found {description} in env var {env_var_name}")
+    return var
+
+
+def credd_from_env_vars():
+    username = load_env_var("NUVOLOS_USERNAME", "username", print_value=True)
+    password = load_env_var("NUVOLOS_SF_TOKEN", "Snowflake token", print_value=False)
+    if username is None or password is None:
+        return None
+    else:
+        return {"username": username, "snowflake_access_token": password}
+
+
 def credd_from_odbc_ini():
     credential_filename = os.getenv(
         "NUVOLOS_CREDENTIAL_FILENAME", os.path.expanduser("~") + "/.odbc.ini"
@@ -16,45 +37,63 @@ def credd_from_odbc_ini():
     # Create engine with credentials
     cred = ConfigParser(interpolation=None)
     if not os.path.exists(credential_filename):
-        raise FileNotFoundError(f"Credentials file {credential_filename} not found")
+        logger.debug(f"Credentials file {credential_filename} not found")
+        return None
     cred.read(credential_filename)
     if not cred.has_section(credential_section):
-        raise ValueError(
+        logger.debug(
             f"Could not find section '{credential_section}' in odbc.ini file {credential_filename}. "
             f"Please add your Nuvolos Snowflake credentials there "
             f"(your username as 'uid' and your Snowflake access token as 'pwd')."
         )
     odbc_ini = dict(cred.items(credential_section))
     if "uid" not in odbc_ini:
-        raise ValueError(
+        logger.debug(
             f"Could not find option 'uid' in the '{credential_section}' "
             f"section of odbc.ini file {credential_filename}. "
             f"Please set it to your Nuvolos username"
         )
+        return None
     if "pwd" not in odbc_ini:
-        raise ValueError(
+        logger.debug(
             f"Could not find option 'pwd' in the '{credential_section}' "
             f"section of odbc.ini file {credential_filename}. "
             f"Please set it to your Nuvolos Snowflake access token"
         )
+        return None
+    logger.debug(f"Found username and snowflake_access_token in {credential_filename}")
     return {"username": odbc_ini["uid"], "snowflake_access_token": odbc_ini["pwd"]}
 
 
-def get_dbpath():
-    path_filename = os.getenv("NUVOLOS_DBPATH_FILE", "/lifecycle/.dbpath")
+def credd_from_secrets():
+    username_filename = os.getenv("NUVOLOS_USERNAME_FILENAME", "/secrets/username")
+    snowflake_access_token_filename = os.getenv(
+        "NUVOLOS_SNOWFLAKE_ACCESSS_TOKEN_FILENAME", "/secrets/snowflake_access_token",
+    )
+    if not os.path.exists(username_filename):
+        logger.debug(f"Could not find secret file {username_filename}")
+        return None
+    if not os.path.exists(snowflake_access_token_filename):
+        logger.debug(f"Could not find secret file {snowflake_access_token_filename}")
+        return None
+    with open(username_filename) as username, open(
+        snowflake_access_token_filename
+    ) as access_token:
+        username = username.readline()
+        password = access_token.readline()
+        logger.debug(f"Found username and Snowflake access token in /secrets files")
+        return {"username": username, "snowflake_access_token": password}
+
+
+def dbpath_from_file(path_filename):
     if not os.path.exists(path_filename):
-        logger.debug(
-            f"Could not find dbpath file {path_filename}, looking at ~/.dbpath instead"
-        )
-        path_filename = os.path.expanduser("~") + "/.dbpath"
-        if not os.path.exists(path_filename):
-            logger.debug(f"Could not find dbpath file {path_filename}")
-            return None, None
+        logger.debug(f"Could not find dbpath file {path_filename}")
+        return None
     with open(path_filename, "r") as path_file:
         lines = path_file.readlines()
         if len(lines) == 0:
             logger.debug(f"Could not parse dbpath file: {path_filename} is empty.")
-            return None, None
+            return None
         first_line = lines[0].rstrip()
         if "Tables are not enabled" in first_line:
             raise Exception(
@@ -68,39 +107,36 @@ def get_dbpath():
                 f'Could not parse dbpath file: pattern "." not found in {path_filename}. '
                 f"Are the names escaped with double quotes?"
             )
-            return None, None
-        # Split removes the two quotes
-        db_name = split_arr[0] + '"'
-        schema_name = '"' + split_arr[1]
+            return None
+        # Remove the remaining double quotes, as we'll escape those
+        db_name = split_arr[0].replace('"', "")
+        schema_name = split_arr[1].replace('"', "")
         logger.debug(
             f"Found database = {db_name}, schema = {schema_name} in dbpath file {path_filename}."
         )
+        return {"db_name": db_name, "schema_name": schema_name}
 
-        return db_name, schema_name
+
+def dbpath_from_env_vars():
+    db_name = load_env_var("NUVOLOS_DB", "Snowflake database", print_value=True)
+    schema_name = load_env_var("NUVOLOS_SCHEMA", "Snowflake schema", print_value=True)
+    if db_name is None or schema_name is None:
+        return None
+    return {"db_name": db_name, "schema_name": schema_name}
 
 
 def get_url(username=None, password=None, dbname=None, schemaname=None):
-    credd = {"username": username, "snowflake_access_token": password}
     if username is None and password is None:
-        username_filename = os.getenv("NUVOLOS_USERNAME_FILENAME", "/secrets/username")
-        snowflake_access_token_filename = os.getenv(
-            "NUVOLOS_SNOWFLAKE_ACCESSS_TOKEN_FILENAME",
-            "/secrets/snowflake_access_token",
-        )
-        if not os.path.exists(username_filename) or not os.path.exists(
-            snowflake_access_token_filename
-        ):
-            logger.debug(
-                f"Could not find file(s) /secrets/username or /secrets/snowflake_access_token, "
-                f"looking for ~/.odbc.ini instead"
+        credd = credd_from_secrets() or credd_from_env_vars() or credd_from_odbc_ini()
+        if credd is None:
+            raise ValueError(
+                "Could not find username and Snowflake access token in Nuvolos secrets, env vars or .odbc.ini file. "
+                "If you're not using this function from Nuvolos, please specify the access token and username "
+                "as input arguments"
             )
-            credd = credd_from_odbc_ini()
         else:
-            with open(username_filename) as username, open(
-                snowflake_access_token_filename
-            ) as access_token:
-                credd["username"] = username.readline()
-                credd["snowflake_access_token"] = access_token.readline()
+            username = credd["username"]
+            password = credd["snowflake_access_token"]
     elif username is not None and password is None:
         raise ValueError(
             "You have provided a username but not a password. "
@@ -111,9 +147,25 @@ def get_url(username=None, password=None, dbname=None, schemaname=None):
             "You have provided a password but not a username. "
             "Please either provide both arguments or leave both arguments empty."
         )
+    else:
+        logger.debug(f"Found username and Snowflake access token as input arguments")
 
     if dbname is None and schemaname is None:
-        db_name, schema_name = get_dbpath()
+        path_filename = os.getenv("NUVOLOS_DBPATH_FILE", "/lifecycle/.dbpath")
+        dbd = (
+            dbpath_from_file(path_filename)
+            or dbpath_from_file(".dbpath")
+            or dbpath_from_env_vars()
+        )
+        if dbd is None:
+            raise ValueError(
+                "Could not find Snowflake database and schema in .dbpath files or env vars. "
+                "If you're not using this function from Nuvolos, "
+                "please specify the Snowflake database and schema names as input arguments"
+            )
+        else:
+            db_name = dbd["db_name"]
+            schema_name = dbd["schema_name"]
     elif dbname is not None and schemaname is None:
         raise ValueError(
             "You have provided a dbname argument but not a schemaname argument. "
@@ -127,36 +179,31 @@ def get_url(username=None, password=None, dbname=None, schemaname=None):
     else:
         db_name = dbname
         schema_name = schemaname
+        logger.debug(f"Found database and schema as input arguments")
 
     default_snowflake_host = (
-        "acstg.eu-central-1"
-        if db_name is not None and "STAGING/" in db_name
-        else "alphacruncher.eu-central-1"
+        "acstg.eu-central-1" if "STAGING/" in db_name else "alphacruncher.eu-central-1"
     )
     snowflake_host = os.getenv("NUVOLOS_SNOWFLAKE_HOST", default_snowflake_host)
     url = (
-        "snowflake://"
-        + quote(credd["username"])
-        + ":"
-        + quote(credd["snowflake_access_token"])
-        + "@"
-        + snowflake_host
+        "snowflake://" + quote(username) + ":" + quote(password) + "@" + snowflake_host
     )
     masked_url = (
-        "snowflake://"
-        + quote(credd["username"])
-        + ":"
-        + "********"
-        + "@"
-        + snowflake_host
+        "snowflake://" + quote(username) + ":" + "********" + "@" + snowflake_host
     )
 
-    if db_name:
-        url = url + "/?database=%22" + quote(db_name) + "%22"
-        masked_url = masked_url + "/?database=%22" + quote(db_name) + "%22"
-        if schema_name:
-            url = url + "&schema=%22" + quote(schema_name) + "%22"
-            masked_url = masked_url + "&schema=%22" + quote(schema_name) + "%22"
+    params = (
+        "/?database=%22"
+        + quote(db_name)
+        + "%22"
+        + "&schema=%22"
+        + quote(schema_name)
+        + "%22"
+        + "&CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX=TRUE"
+        + "&VALIDATEDEFAULTPARAMETERS=TRUE"
+    )
+    url = url + params
+    masked_url = masked_url + params
     logger.debug("Built SQLAlchemy URL: " + masked_url)
     return url
 
