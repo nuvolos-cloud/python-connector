@@ -3,6 +3,7 @@ import logging
 from sqlalchemy import engine_from_config
 from configparser import ConfigParser
 import re
+from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
 
@@ -135,31 +136,27 @@ def get_url(username=None, password=None, dbname=None, schemaname=None):
     snowflake_host = os.getenv("NUVOLOS_SNOWFLAKE_HOST", default_snowflake_host)
     url = (
         "snowflake://"
-        + credd["username"]
+        + quote(credd["username"])
         + ":"
-        + credd["snowflake_access_token"]
+        + quote(credd["snowflake_access_token"])
         + "@"
         + snowflake_host
-        + "/?warehouse="
-        + credd["username"]
     )
     masked_url = (
         "snowflake://"
-        + credd["username"]
+        + quote(credd["username"])
         + ":"
         + "********"
         + "@"
         + snowflake_host
-        + "/?warehouse="
-        + credd["username"]
     )
 
     if db_name:
-        url = url + "&database=" + db_name
-        masked_url = masked_url + "&database=" + db_name
+        url = url + "/?database=%22" + quote(db_name) + "%22"
+        masked_url = masked_url + "/?database=%22" + quote(db_name) + "%22"
         if schema_name:
-            url = url + "&schema=" + schema_name
-            masked_url = masked_url + "&schema=" + schema_name
+            url = url + "&schema=%22" + quote(schema_name) + "%22"
+            masked_url = masked_url + "&schema=%22" + quote(schema_name) + "%22"
     logger.debug("Built SQLAlchemy URL: " + masked_url)
     return url
 
