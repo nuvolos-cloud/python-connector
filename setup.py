@@ -8,7 +8,7 @@ def readme():
 
 setup(
     name="nuvolos",
-    version="0.2.9",
+    version="0.3.0",
     description="The Nuvolos python library for database connectivity",
     long_description=readme(),
     url="https://github.com/nuvolos-cloud/python-connector",
@@ -16,6 +16,6 @@ setup(
     author_email="support@nuvolos.cloud",
     license="MIT",
     packages=["nuvolos"],
-    install_requires=["snowflake-sqlalchemy"],
+    install_requires=["pyodbc"],
     zip_safe=False,
 )

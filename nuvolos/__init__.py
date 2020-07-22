@@ -1,5 +1,6 @@
 import os
 import logging
+import pyodbc as pyodbc
 from sqlalchemy import engine_from_config
 from configparser import ConfigParser
 import re
@@ -125,7 +126,7 @@ def dbpath_from_env_vars():
     return {"db_name": db_name, "schema_name": schema_name}
 
 
-def get_url(username=None, password=None, dbname=None, schemaname=None):
+def get_connection_string(username=None, password=None, dbname=None, schemaname=None):
     if username is None and password is None:
         credd = credd_from_secrets() or credd_from_env_vars() or credd_from_odbc_ini()
         if credd is None:
@@ -185,38 +186,26 @@ def get_url(username=None, password=None, dbname=None, schemaname=None):
         "acstg.eu-central-1" if "STAGING/" in db_name else "alphacruncher.eu-central-1"
     )
     snowflake_host = os.getenv("NUVOLOS_SNOWFLAKE_HOST", default_snowflake_host)
-    url = (
-        "snowflake://" + quote(username) + ":" + quote(password) + "@" + snowflake_host
+    connection_string = (
+        f"DRIVER=SnowflakeDSIIDriver;SERVER={snowflake_host}.snowflakecomputing.com;DATABASE=%22{quote(db_name)}%22;SCHEMA=%22{quote(schema_name)}%22;UID={username};PWD={password}"
     )
-    masked_url = (
-        "snowflake://" + quote(username) + ":" + "********" + "@" + snowflake_host
+    masked_connection_string = (
+        f"DRIVER=SnowflakeDSIIDriver;SERVER={snowflake_host}.snowflakecomputing.com;DATABASE=%22{quote(db_name)}%22;SCHEMA=%22{quote(schema_name)}%22;UID={username};PWD=************"
     )
 
     params = (
-        "/?database=%22"
-        + quote(db_name)
-        + "%22"
-        + "&schema=%22"
-        + quote(schema_name)
-        + "%22"
-        + "&CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX=TRUE"
-        + "&VALIDATEDEFAULTPARAMETERS=TRUE"
+        ";CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX=TRUE"
+        + ";VALIDATEDEFAULTPARAMETERS=TRUE"
     )
-    url = url + params
-    masked_url = masked_url + params
-    logger.debug("Built SQLAlchemy URL: " + masked_url)
-    return url
-
-
-def get_engine(username=None, password=None, dbname=None, schemaname=None):
-    return engine_from_config(
-        {
-            "sqlalchemy.url": get_url(username, password, dbname, schemaname),
-            "sqlalchemy.echo": False,
-        }
-    )
+    connection_string = connection_string + params
+    masked_connection_string = masked_connection_string + params
+    logger.debug("Built ODBC connection string: " + masked_connection_string)
+    return connection_string
 
 
 def get_connection(username=None, password=None, dbname=None, schemaname=None):
-    loc_eng = get_engine(username, password, dbname, schemaname)
-    return loc_eng.connect()
+    connection_string = get_connection_string(username, password, dbname, schemaname)
+    conn = pyodbc.connect(connection_string)
+    conn.setencoding('utf-8')
+    conn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
+    return conn
