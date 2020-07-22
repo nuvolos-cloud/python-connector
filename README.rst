@@ -24,9 +24,9 @@ You can get the ODBC connection string or create a pyodbc connection object:
 
     >>> from nuvolos import get_connection_string, get_connection
     >>> get_connection_string()
-    'snowflake://<username>:<password>@alphacruncher.eu-central-1/?database=%22<dbname>%22&schema=%22<schemaname>%22'
+    ''DRIVER=SnowflakeDSIIDriver;SERVER=alphacruncher.eu-central-1.snowflakecomputing.com;DATABASE=%22<dbname>%22;SCHEMA=%22<schemaname>%22;UID=<username>;PWD=<password>;CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX=TRUE;VALIDATEDEFAULTPARAMETERS=TRUE
     >>> get_connection_string(username="abc", password="def", dbname="db_name", schemaname="schema_name")
-    'snowflake://abc:def@alphacruncher.eu-central-1/&database=db_name&schema=schema_name'
+    'DRIVER=SnowflakeDSIIDriver;SERVER=alphacruncher.eu-central-1.snowflakecomputing.com;DATABASE=%22db_name%22;SCHEMA=%22schema_name%22;UID=abc;PWD=def;CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX=TRUE;VALIDATEDEFAULTPARAMETERS=TRUE'
     >>> con = get_connection()
 
 In general, we suggest using :code:`get_connection()` to obtain a pyodbc connection that you can execute statements with.
@@ -40,7 +40,7 @@ You can get the ODBC connection string, or pyodbc connection as with Nuvolos, ho
 
    >>> from nuvolos import get_connection_string, get_connection
    >>> get_connection_string(username="username", password = "password", dbname = "dbname", schemaname="schemaname")
-   'snowflake://username:password@alphacruncher.eu-central-1/?database=%22dbname%22&schema=%22schemaname%22'
+   'DRIVER=SnowflakeDSIIDriver;SERVER=alphacruncher.eu-central-1.snowflakecomputing.com;DATABASE=%22db_name%22;SCHEMA=%22schema_name%22;UID=abc;PWD=def;CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX=TRUE;VALIDATEDEFAULTPARAMETERS=TRUE'
    >>> con = get_connection(username="username", password = "password", dbname = "dbname", schemaname="schemaname")
 
 You can provide defaults for the above parameters by creating special files.
