@@ -1,7 +1,6 @@
 import os
 import logging
 import pyodbc as pyodbc
-from sqlalchemy import engine_from_config
 from configparser import ConfigParser
 import re
 from urllib.parse import quote
