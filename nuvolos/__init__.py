@@ -4,6 +4,7 @@ import pyodbc as pyodbc
 from configparser import ConfigParser
 import re
 from urllib.parse import quote
+import keyring
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +47,11 @@ def credd_from_odbc_ini():
             f"Please add your Nuvolos Snowflake credentials there "
             f"(your username as 'uid' and your Snowflake access token as 'pwd')."
         )
-    odbc_ini = dict(cred.items(credential_section))
+    try:
+        odbc_ini = dict(cred.items(credential_section))
+    except:
+        odbc_ini = {}
+        
     if "uid" not in odbc_ini:
         logger.debug(
             f"Could not find option 'uid' in the '{credential_section}' "
@@ -83,6 +88,19 @@ def credd_from_secrets():
         password = access_token.readline()
         logger.debug(f"Found username and Snowflake access token in /secrets files")
         return {"username": username, "snowflake_access_token": password}
+
+
+def input_nuvolos_credential(username, password):
+    # store username & password
+    keyring.set_password("nuvolos", "username", username)
+    keyring.set_password("nuvolos", username, password)
+
+
+def credd_from_local():
+    # retrieve username & password
+    username = keyring.get_password("nuvolos", "username")
+    password = keyring.get_password("nuvolos", username)
+    return {"username": username, "snowflake_access_token": password}
 
 
 def dbpath_from_file(path_filename):
@@ -127,12 +145,12 @@ def dbpath_from_env_vars():
 
 def get_connection_string(username=None, password=None, dbname=None, schemaname=None):
     if username is None and password is None:
-        credd = credd_from_secrets() or credd_from_env_vars() or credd_from_odbc_ini()
+        credd = credd_from_secrets() or credd_from_env_vars() or credd_from_odbc_ini() or credd_from_local()
         if credd is None:
             raise ValueError(
-                "Could not find username and Snowflake access token in Nuvolos secrets, env vars or .odbc.ini file. "
-                "If you're not using this function from Nuvolos, please specify the access token and username "
-                "as input arguments"
+                "Could not find username and Snowflake access token in Nuvolos secrets, env vars, .odbc.ini file, or local setting. "
+                "If you're not using this function from Nuvolos, please run once this command in Python to safely store your credential in local"
+                "input_nuvolos_credential('your_username', 'your_password')"
             )
         else:
             username = credd["username"]
@@ -202,7 +220,23 @@ def get_connection_string(username=None, password=None, dbname=None, schemaname=
     return connection_string
 
 
-def get_connection(username=None, password=None, dbname=None, schemaname=None):
+def get_connection(*args, **kwargs):
+    if len(args) == 2:
+        username = None
+        password = None        
+        dbname = args[0]
+        schemaname = args[1]
+    elif len(args) == 4:
+        username = args[0]
+        password = args[1]
+        dbname = args[2]
+        schemaname = args[3]
+    else:
+        username = kwargs.get('username')
+        password = kwargs.get('password')      
+        dbname = kwargs.get('dbname')
+        schemaname = kwargs.get('schemaname')
+
     connection_string = get_connection_string(username, password, dbname, schemaname)
     conn = pyodbc.connect(connection_string)
     conn.setencoding('utf-8')
