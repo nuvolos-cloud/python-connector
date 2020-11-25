@@ -5,6 +5,7 @@ from configparser import ConfigParser
 import re
 from urllib.parse import quote
 import keyring
+import getpass
 
 logger = logging.getLogger(__name__)
 
@@ -90,9 +91,12 @@ def credd_from_secrets():
         return {"username": username, "snowflake_access_token": password}
 
 
-def input_nuvolos_credential(username, password):
+def input_nuvolos_credential():
     # store username & password
+    username = getpass.getpass('Please input your Nuvolos username:')
     keyring.set_password("nuvolos", "username", username)
+
+    password = getpass.getpass('Please input your Nuvolos password:')
     keyring.set_password("nuvolos", username, password)
 
 
@@ -147,14 +151,11 @@ def get_connection_string(username=None, password=None, dbname=None, schemaname=
     if username is None and password is None:
         credd = credd_from_secrets() or credd_from_env_vars() or credd_from_odbc_ini() or credd_from_local()
         if credd is None:
-            raise ValueError(
-                "Could not find username and Snowflake access token in Nuvolos secrets, env vars, .odbc.ini file, or local setting. "
-                "If you're not using this function from Nuvolos, please run once this command in Python to safely store your credential in local"
-                "input_nuvolos_credential('your_username', 'your_password')"
-            )
-        else:
-            username = credd["username"]
-            password = credd["snowflake_access_token"]
+            input_nuvolos_credential()
+            credd = credd_from_local()
+        
+        username = credd["username"]
+        password = credd["snowflake_access_token"]
     elif username is not None and password is None:
         raise ValueError(
             "You have provided a username but not a password. "
