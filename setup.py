@@ -16,6 +16,6 @@ setup(
     author_email="support@nuvolos.cloud",
     license="MIT",
     packages=["nuvolos"],
-    install_requires=["pyodbc", "keyring"],
+    install_requires=["keyring", "pyodbc"],
     zip_safe=False,
 )
