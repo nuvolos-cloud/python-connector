@@ -1,11 +1,16 @@
-import os
-import logging
-import pyodbc as pyodbc
-from configparser import ConfigParser
-import re
-from urllib.parse import quote
-import keyring
 import getpass
+import logging
+import os
+import re
+from configparser import ConfigParser
+from urllib.parse import quote
+
+import keyring
+import snowflake.connector
+from sqlalchemy import create_engine
+from .version import __version__
+from .sql_utils import to_sql
+
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +57,7 @@ def credd_from_odbc_ini():
         odbc_ini = dict(cred.items(credential_section))
     except:
         odbc_ini = {}
-        
+
     if "uid" not in odbc_ini:
         logger.debug(
             f"Could not find option 'uid' in the '{credential_section}' "
@@ -74,7 +79,8 @@ def credd_from_odbc_ini():
 def credd_from_secrets():
     username_filename = os.getenv("NUVOLOS_USERNAME_FILENAME", "/secrets/username")
     snowflake_access_token_filename = os.getenv(
-        "NUVOLOS_SNOWFLAKE_ACCESSS_TOKEN_FILENAME", "/secrets/snowflake_access_token",
+        "NUVOLOS_SNOWFLAKE_ACCESSS_TOKEN_FILENAME",
+        "/secrets/snowflake_access_token",
     )
     if not os.path.exists(username_filename):
         logger.debug(f"Could not find secret file {username_filename}")
@@ -93,10 +99,10 @@ def credd_from_secrets():
 
 def input_nuvolos_credential():
     # store username & password
-    username = getpass.getpass('Please input your Nuvolos username:')
+    username = getpass.getpass("Please input your Nuvolos username:")
     keyring.set_password("nuvolos", "username", username)
 
-    password = getpass.getpass('Please input your Nuvolos password:')
+    password = getpass.getpass("Please input your Nuvolos password:")
     keyring.set_password("nuvolos", username, password)
 
 
@@ -147,13 +153,18 @@ def dbpath_from_env_vars():
     return {"db_name": db_name, "schema_name": schema_name}
 
 
-def get_connection_string(username=None, password=None, dbname=None, schemaname=None):
+def _get_connection_params(username=None, password=None, dbname=None, schemaname=None):
     if username is None and password is None:
-        credd = credd_from_secrets() or credd_from_env_vars() or credd_from_odbc_ini() or credd_from_local()
+        credd = (
+            credd_from_secrets()
+            or credd_from_env_vars()
+            or credd_from_odbc_ini()
+            or credd_from_local()
+        )
         if credd is None:
             input_nuvolos_credential()
             credd = credd_from_local()
-        
+
         username = credd["username"]
         password = credd["snowflake_access_token"]
     elif username is not None and password is None:
@@ -204,42 +215,86 @@ def get_connection_string(username=None, password=None, dbname=None, schemaname=
         "acstg.eu-central-1" if "STAGING/" in db_name else "alphacruncher.eu-central-1"
     )
     snowflake_host = os.getenv("NUVOLOS_SNOWFLAKE_HOST", default_snowflake_host)
-    connection_string = (
-        f"DRIVER=SnowflakeDSIIDriver;SERVER={snowflake_host}.snowflakecomputing.com;DATABASE=%22{quote(db_name)}%22;SCHEMA=%22{quote(schema_name)}%22;UID={username};PWD={password}"
+    return username, password, snowflake_host, db_name, schema_name
+
+
+def get_url(username=None, password=None, dbname=None, schemaname=None):
+    """
+    Returns an SQLAlchemy connection URL which can be used to create a connection to Nuvolos.
+    :param username: Nuvolos user name.
+    :param password: Nuvolos password.
+    :param dbname: Nuvolos database name from the Connection Guide.
+    :param schemaname: Nuvolos schema name from the Connection Guide.
+    :return: An SQLAlchemy connection URL representing the Nuvolos connection.
+    """
+    username, password, snowflake_host, db_name, schema_name = _get_connection_params(
+        username=username, password=password, dbname=dbname, schemaname=schemaname
     )
-    masked_connection_string = (
-        f"DRIVER=SnowflakeDSIIDriver;SERVER={snowflake_host}.snowflakecomputing.com;DATABASE=%22{quote(db_name)}%22;SCHEMA=%22{quote(schema_name)}%22;UID={username};PWD=************"
+    url = (
+        "snowflake://" + quote(username) + ":" + quote(password) + "@" + snowflake_host
+    )
+    masked_url = (
+        "snowflake://" + quote(username) + ":" + "********" + "@" + snowflake_host
     )
 
     params = (
-        ";CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX=TRUE"
-        + ";VALIDATEDEFAULTPARAMETERS=TRUE"
+        "/?database=%22"
+        + quote(db_name)
+        + "%22"
+        + "&schema=%22"
+        + quote(schema_name)
+        + "%22"
+        + "&CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX=TRUE"
+        + "&VALIDATEDEFAULTPARAMETERS=TRUE"
     )
-    connection_string = connection_string + params
-    masked_connection_string = masked_connection_string + params
-    logger.debug("Built ODBC connection string: " + masked_connection_string)
-    return connection_string
+    url = url + params
+    masked_url = masked_url + params
+    logger.debug("Built SQLAlchemy URL: " + masked_url)
+    return url
 
 
-def get_connection(*args, **kwargs):
-    if len(args) == 2:
-        username = None
-        password = None        
-        dbname = args[0]
-        schemaname = args[1]
-    elif len(args) == 4:
-        username = args[0]
-        password = args[1]
-        dbname = args[2]
-        schemaname = args[3]
-    else:
-        username = kwargs.get('username')
-        password = kwargs.get('password')      
-        dbname = kwargs.get('dbname')
-        schemaname = kwargs.get('schemaname')
+def get_engine(username=None, password=None, dbname=None, schemaname=None):
+    """
+    Returns an SQLAlchemy Engine object which can be used with Pandas read_sql/to_sql functions.
+    :param username: Nuvolos user name.
+    :param password: Nuvolos password.
+    :param dbname: Nuvolos database name from the Connection Guide.
+    :param schemaname: Nuvolos schema name from the Connection Guide.
+    :return: A SQLAlchemy Engine object.
+    """
+    return create_engine(
+        url=get_url(username, password, dbname, schemaname),
+        echo=False,
+        connect_args={
+            "QUERY_TAG": f"nuvolos {__version__}",
+        },
+    )
 
-    connection_string = get_connection_string(username, password, dbname, schemaname)
-    conn = pyodbc.connect(connection_string)
-    conn.setencoding('utf-8')
-    conn.setdecoding(pyodbc.SQL_CHAR, encoding='utf-8')
-    return conn
+
+def get_connection(username=None, password=None, dbname=None, schemaname=None):
+    loc_eng = get_engine(username, password, dbname, schemaname)
+    return loc_eng.connect()
+
+
+def get_raw_connection(username=None, password=None, dbname=None, schemaname=None):
+    """
+    Returns a raw Snowflake Python Connector API Connection object.
+    :param username: Nuvolos user name.
+    :param password: Nuvolos password.
+    :param dbname: Nuvolos database name from the Connection Guide.
+    :param schemaname: Nuvolos schema name from the Connection Guide.
+    :return: A snowflake.connector.Connection object
+    """
+    username, password, snowflake_host, db_name, schema_name = _get_connection_params(
+        username=username, password=password, dbname=dbname, schemaname=schemaname
+    )
+    return snowflake.connector.connect(
+        user=username,
+        password=password,
+        account=snowflake_host,
+        database=db_name,
+        schema=schema_name,
+        session_parameters={
+            "QUERY_TAG": f"nuvolos {__version__}",
+        },
+    )
