@@ -18,7 +18,7 @@ setup(
     license="MIT",
     packages=find_packages(exclude=("tests",)),
     include_package_data=True,
-    install_requires=["keyring", "sqlalchemy>='1.4.0'", "snowflake-connector-python[pandas]", "snowflake-sqlalchemy"],
+    install_requires=["keyring", "sqlalchemy>='1.4.0'", "snowflake-connector-python[pandas]<2.6.0", "snowflake-sqlalchemy"],
     zip_safe=False,
     setup_requires=['pytest-runner'],
     tests_require=['pytest'],
