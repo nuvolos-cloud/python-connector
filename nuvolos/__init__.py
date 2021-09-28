@@ -109,7 +109,7 @@ def input_nuvolos_credential():
 def credd_from_local():
     # retrieve username & password
     username = keyring.get_password("nuvolos", "username")
-    password = keyring.get_password("nuvolos", username)
+    password = keyring.get_password("nuvolos", username) if username else None
     return {"username": username, "snowflake_access_token": password}
 
 
@@ -161,7 +161,7 @@ def _get_connection_params(username=None, password=None, dbname=None, schemaname
             or credd_from_odbc_ini()
             or credd_from_local()
         )
-        if credd is None or credd.get('username') is None or credd.get('password') is None:
+        if credd is None or credd.get('username') is None or credd.get('snowflake_access_token') is None:
             input_nuvolos_credential()
             credd = credd_from_local()
 
