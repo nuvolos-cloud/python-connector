@@ -161,7 +161,7 @@ def _get_connection_params(username=None, password=None, dbname=None, schemaname
             or credd_from_odbc_ini()
             or credd_from_local()
         )
-        if credd is None or cred.get('username') is None or cred.get('password') is None:
+        if credd is None or credd.get('username') is None or credd.get('password') is None:
             input_nuvolos_credential()
             credd = credd_from_local()
 
