@@ -323,7 +323,9 @@ def to_sql(
         ingested correctly, # of chunks, # of ingested rows, and ingest's output.
     """
     if not isinstance(con, Connection):
-        raise ValueError(f"Provided con object is not an sqlalchemy.engine.Connection instance.")
+        raise ValueError(
+            f"Provided con object is not an sqlalchemy.engine.Connection instance."
+        )
     if if_exists not in ("fail", "replace", "append"):
         raise ValueError(f"'{if_exists}' is not valid for if_exists")
 
@@ -354,9 +356,12 @@ def to_sql(
                     random.choice(string.ascii_lowercase) for _ in range(5)
                 )
                 create_stage_sql = (
-                    "CREATE TEMPORARY STAGE /* Python:nuvolos.to_sql() */ " '"{stage_name}"'
+                    "CREATE TEMPORARY STAGE /* Python:nuvolos.to_sql() */ "
+                    '"{stage_name}"'
                 ).format(stage_name=stage_name)
-                logger.debug("Creating temporary stage with '{}'".format(create_stage_sql))
+                logger.debug(
+                    "Creating temporary stage with '{}'".format(create_stage_sql)
+                )
                 con.execute(create_stage_sql)
                 break
             except ProgrammingError as pe:
@@ -373,7 +378,10 @@ def to_sql(
                 # Dump chunk into parquet file
                 if nanoseconds:
                     chunk.to_parquet(
-                        chunk_path, compression="snappy", index=index, version="2.0"
+                        chunk_path,
+                        compression="snappy",
+                        index=index,
+                        version="2.6",
                     )
                 else:
                     chunk.to_parquet(chunk_path, compression="snappy", index=index)
