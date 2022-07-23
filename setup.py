@@ -6,7 +6,7 @@ def readme():
         return f.read()
 
 
-exec(open('nuvolos/version.py').read())
+exec(open("nuvolos/version.py").read())
 setup(
     name="nuvolos",
     version=__version__,
@@ -18,8 +18,15 @@ setup(
     license="MIT",
     packages=find_packages(exclude=("tests",)),
     include_package_data=True,
-    install_requires=["keyring", "pyarrow!=8.0.0", "sqlalchemy>='1.4.0'", "pandas>=1.1.0", "snowflake-connector-python>2.6.1", "snowflake-sqlalchemy"],
+    install_requires=[
+        "keyring",
+        "pyarrow!=8.0.0",
+        "sqlalchemy>='1.4.0'",
+        "pandas>=1.1.0",
+        "snowflake-connector-python>2.6.1",
+        "snowflake-sqlalchemy!=1.4.0",
+    ],
     zip_safe=False,
-    setup_requires=['pytest-runner'],
-    tests_require=['pytest'],
+    setup_requires=["pytest-runner"],
+    tests_require=["pytest"],
 )
