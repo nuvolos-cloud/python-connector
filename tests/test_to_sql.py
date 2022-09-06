@@ -60,6 +60,54 @@ def df_case_sensitive():
     return df
 
 
+@pytest.fixture
+def df_without_ns():
+    df = pd.DataFrame(
+        {
+            "col_without_ns": [
+                pd.Timestamp(year=2022, month=9, day=1, hour=2, minute=34, second=56),
+                pd.NaT,
+                pd.Timestamp(year=2022, month=9, day=1, hour=2, minute=34, second=56, microsecond=123456),
+            ],
+        }
+    )
+    df["seq_num"] = df.index
+    df.set_index("seq_num", inplace=True)
+    return df
+
+
+@pytest.fixture
+def df_with_ns():
+    df = pd.DataFrame(
+        {
+            "col_with_ns": [
+                pd.Timestamp(
+                    year=2022,
+                    month=9,
+                    day=1,
+                    hour=2,
+                    minute=34,
+                    second=56,
+                    nanosecond=123456789,
+                ),
+                pd.NaT,
+                pd.Timestamp(
+                    year=2022,
+                    month=9,
+                    day=1,
+                    hour=2,
+                    minute=34,
+                    second=57,
+                    nanosecond=123456789,
+                ),
+            ],
+        }
+    )
+    df["seq_num"] = df.index
+    df.set_index("seq_num", inplace=True)
+    return df
+
+
 def test_case_insensitive(df_case_insensitive):
     conn = None
     try:
@@ -76,7 +124,7 @@ def test_case_insensitive(df_case_insensitive):
             database=os.getenv("TEST_DBNAME"),
             schema=os.getenv("TEST_SCHEMANAME"),
             index=False,
-            if_exists="replace"
+            if_exists="replace",
         )
         df_r = pd.read_sql("SELECT * FROM NO_QUOTES_NO_INDEX;", con=conn)
         df_c = df_case_insensitive.compare(df_r)
@@ -102,10 +150,12 @@ def test_case_sensitive(df_case_sensitive):
             database=os.getenv("TEST_DBNAME"),
             schema=os.getenv("TEST_SCHEMANAME"),
             index=True,
-            if_exists="replace"
+            if_exists="replace",
         )
 
-        df_r = pd.read_sql('SELECT * FROM "quotes_AND_index";', con=conn, index_col="Seq_Num")
+        df_r = pd.read_sql(
+            'SELECT * FROM "quotes_AND_index";', con=conn, index_col="Seq_Num"
+        )
 
         # Fully-uppercase, quoted columns are also returned as lowercase due to
         # https://github.com/snowflakedb/snowflake-sqlalchemy/issues/157
@@ -134,7 +184,7 @@ def test_check_transaction(df_case_insensitive):
             database=os.getenv("TEST_DBNAME"),
             schema=os.getenv("TEST_SCHEMANAME"),
             index=False,
-            if_exists="replace"
+            if_exists="replace",
         )
     finally:
         if conn:
@@ -149,6 +199,81 @@ def test_check_transaction(df_case_insensitive):
         )
         df_r = pd.read_sql("SELECT * FROM check_transaction;", con=conn2)
         df_c = df_case_insensitive.compare(df_r)
+        assert len(df_c.index) == 0
+    finally:
+        if conn2:
+            conn2.close()
+
+
+def test_without_nanoseconds(df_without_ns):
+    conn = None
+    try:
+        conn = get_connection(
+            username=os.getenv("TEST_USERNAME"),
+            password=os.getenv("TEST_PASSWORD"),
+            dbname=os.getenv("TEST_DBNAME"),
+            schemaname=os.getenv("TEST_SCHEMANAME"),
+        )
+        to_sql(
+            df=df_without_ns,
+            name="without_ns",
+            con=conn,
+            database=os.getenv("TEST_DBNAME"),
+            schema=os.getenv("TEST_SCHEMANAME"),
+            index=False,
+            if_exists="replace",
+        )
+    finally:
+        if conn:
+            conn.close()
+    conn2 = None
+    try:
+        conn2 = get_connection(
+            username=os.getenv("TEST_USERNAME"),
+            password=os.getenv("TEST_PASSWORD"),
+            dbname=os.getenv("TEST_DBNAME"),
+            schemaname=os.getenv("TEST_SCHEMANAME"),
+        )
+        df_r = pd.read_sql("SELECT * FROM without_ns;", con=conn2)
+        df_c = df_without_ns.compare(df_r)
+        assert len(df_c.index) == 0
+    finally:
+        if conn2:
+            conn2.close()
+
+
+def test_with_nanoseconds(df_with_ns):
+    conn = None
+    try:
+        conn = get_connection(
+            username=os.getenv("TEST_USERNAME"),
+            password=os.getenv("TEST_PASSWORD"),
+            dbname=os.getenv("TEST_DBNAME"),
+            schemaname=os.getenv("TEST_SCHEMANAME"),
+        )
+        to_sql(
+            df=df_with_ns,
+            name="with_ns",
+            con=conn,
+            database=os.getenv("TEST_DBNAME"),
+            schema=os.getenv("TEST_SCHEMANAME"),
+            index=False,
+            if_exists="replace",
+            nanoseconds=True,
+        )
+    finally:
+        if conn:
+            conn.close()
+    conn2 = None
+    try:
+        conn2 = get_connection(
+            username=os.getenv("TEST_USERNAME"),
+            password=os.getenv("TEST_PASSWORD"),
+            dbname=os.getenv("TEST_DBNAME"),
+            schemaname=os.getenv("TEST_SCHEMANAME"),
+        )
+        df_r = pd.read_sql("SELECT * FROM with_ns;", con=conn2)
+        df_c = df_with_ns.compare(df_r)
         assert len(df_c.index) == 0
     finally:
         if conn2:
