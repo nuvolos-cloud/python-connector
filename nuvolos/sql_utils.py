@@ -299,7 +299,7 @@ def to_sql(
     if_exists="fail",
     index=True,
     index_label=None,
-    nanoseconds=False,
+    nanoseconds=True,
 ):
     """
     Load a DataFrame to the specified table in the database.

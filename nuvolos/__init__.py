@@ -7,6 +7,7 @@ from urllib.parse import quote
 
 import keyring
 import snowflake.connector
+from snowflake.sqlalchemy import URL
 from sqlalchemy import create_engine
 from .version import __version__
 from .sql_utils import to_sql
@@ -93,7 +94,7 @@ def credd_from_secrets():
     ) as access_token:
         username = username.readline()
         password = access_token.readline()
-        logger.debug(f"Found username and Snowflake access token in /secrets files")
+        logger.debug("Found username and Snowflake access token in /secrets files")
         return {"username": username, "snowflake_access_token": password}
 
 
@@ -125,7 +126,7 @@ def dbpath_from_file(path_filename):
         first_line = lines[0].rstrip()
         if "Tables are not enabled" in first_line:
             raise Exception(
-                f"Tables are not enabled for this space, please enable them first"
+                "Tables are not enabled for this space, please enable them first."
             )
         # Split at "." character
         # This should have resulted in two substrings
@@ -171,10 +172,14 @@ def _get_connection_params(username=None, password=None, dbname=None, schemaname
 
         username = credd["username"]
         password = credd["snowflake_access_token"]
-    elif username is not None and password is None:
+    elif (
+        username is not None
+        and password is None
+        and "SNOWFLAKE_RSA_KEY" not in os.environ
+    ):
         raise ValueError(
             "You have provided a username but not a password. "
-            "Please either provide both arguments or leave both arguments empty."
+            "Please provite a password or set the SNOWFLAKE_RSA_KEY environment variable."
         )
     elif username is None and password is not None:
         raise ValueError(
@@ -182,7 +187,7 @@ def _get_connection_params(username=None, password=None, dbname=None, schemaname
             "Please either provide both arguments or leave both arguments empty."
         )
     else:
-        logger.debug(f"Found username and Snowflake access token as input arguments")
+        logger.debug("Found username and Snowflake access token as input arguments")
 
     if dbname is None and schemaname is None:
         path_filename = os.getenv("NUVOLOS_DBPATH_FILE", "/lifecycle/.dbpath")
@@ -213,7 +218,7 @@ def _get_connection_params(username=None, password=None, dbname=None, schemaname
     else:
         db_name = dbname
         schema_name = schemaname
-        logger.debug(f"Found database and schema as input arguments")
+        logger.debug("Found database and schema as input arguments")
 
     default_snowflake_host = (
         "acstg.eu-central-1" if "STAGING/" in db_name else "alphacruncher.eu-central-1"
@@ -222,7 +227,7 @@ def _get_connection_params(username=None, password=None, dbname=None, schemaname
     return username, password, snowflake_host, db_name, schema_name
 
 
-def get_url(username=None, password=None, dbname=None, schemaname=None):
+def get_url(username=None, password=None, dbname=None, schemaname=None) -> URL:
     """
     Returns an SQLAlchemy connection URL which can be used to create a connection to Nuvolos.
     :param username: Nuvolos user name.
@@ -234,12 +239,14 @@ def get_url(username=None, password=None, dbname=None, schemaname=None):
     username, password, snowflake_host, db_name, schema_name = _get_connection_params(
         username=username, password=password, dbname=dbname, schemaname=schemaname
     )
-    url = (
-        "snowflake://" + quote(username) + ":" + quote(password) + "@" + snowflake_host
-    )
-    masked_url = (
-        "snowflake://" + quote(username) + ":" + "********" + "@" + snowflake_host
-    )
+
+    # Add RSA key authentication if configured
+    private_key_path = os.getenv("SNOWFLAKE_RSA_KEY")
+    if private_key_path is not None:
+        logger.debug(f"Using RSA key authentication with key file: {private_key_path}")
+        masked_url = f"snowflake://{quote(username)}:'RSA_KEY'@{snowflake_host}"
+    else:
+        masked_url = f"snowflake://{quote(username)}:'********'@{snowflake_host}"
 
     params = (
         "/?database=%22"
@@ -251,10 +258,26 @@ def get_url(username=None, password=None, dbname=None, schemaname=None):
         + "&CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX=TRUE"
         + "&VALIDATEDEFAULTPARAMETERS=TRUE"
     )
-    url = url + params
     masked_url = masked_url + params
+
     logger.debug("Built SQLAlchemy URL: " + masked_url)
-    return url
+    if password:
+        return URL(
+            account=snowflake_host,
+            user=username,
+            password=password,
+            database=db_name,
+            schema=schema_name,
+            numpy=True,
+        )
+    else:
+        return URL(
+            account=snowflake_host,
+            user=username,
+            database=db_name,
+            schema=schema_name,
+            numpy=True,
+        )
 
 
 def get_engine(username=None, password=None, dbname=None, schemaname=None):
@@ -266,12 +289,43 @@ def get_engine(username=None, password=None, dbname=None, schemaname=None):
     :param schemaname: Nuvolos schema name from the Connection Guide.
     :return: A SQLAlchemy Engine object.
     """
+
+    connect_args = {
+        "QUERY_TAG": f"nuvolos {__version__}",
+        "CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX": True,
+        "VALIDATEDEFAULTPARAMETERS": True,
+    }
+
+    private_key_path = os.getenv("SNOWFLAKE_RSA_KEY")
+    if private_key_path is not None:
+        from cryptography.hazmat.backends import default_backend
+        from cryptography.hazmat.primitives.asymmetric import rsa
+        from cryptography.hazmat.primitives.asymmetric import dsa
+        from cryptography.hazmat.primitives import serialization
+
+        # Check if the private key file exists
+        if not os.path.exists(private_key_path):
+            raise FileNotFoundError(f"Private key file {private_key_path} not found")
+
+        password = os.getenv("SNOWFLAKE_RSA_KEY_PASSPHRASE", None)
+        with open(private_key_path, "rb") as key:
+            p_key = serialization.load_pem_private_key(
+                key.read(),
+                password=password.encode() if password is not None else None,
+                backend=default_backend(),
+            )
+
+        pkb = p_key.private_bytes(
+            encoding=serialization.Encoding.DER,
+            format=serialization.PrivateFormat.PKCS8,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        connect_args["private_key"] = pkb
+
     return create_engine(
         url=get_url(username, password, dbname, schemaname),
         echo=False,
-        connect_args={
-            "QUERY_TAG": f"nuvolos {__version__}",
-        },
+        connect_args=connect_args,
     )
 
 
@@ -289,16 +343,36 @@ def get_raw_connection(username=None, password=None, dbname=None, schemaname=Non
     :param schemaname: Nuvolos schema name from the Connection Guide.
     :return: A snowflake.connector.Connection object
     """
-    username, password, snowflake_host, db_name, schema_name = _get_connection_params(
+    (
+        username,
+        password,
+        snowflake_host,
+        db_name,
+        schema_name,
+    ) = _get_connection_params(
         username=username, password=password, dbname=dbname, schemaname=schemaname
     )
-    return snowflake.connector.connect(
-        user=username,
-        password=password,
-        account=snowflake_host,
-        database=db_name,
-        schema=schema_name,
-        session_parameters={
+
+    connect_args = {
+        "user": username,
+        "account": snowflake_host,
+        "database": db_name,
+        "schema": schema_name,
+        "session_parameters": {
             "QUERY_TAG": f"nuvolos {__version__}",
         },
-    )
+    }
+
+    if os.getenv("SNOWFLAKE_RSA_KEY"):
+        connect_args["private_key_file"] = os.getenv("SNOWFLAKE_RSA_KEY")
+        logger.debug(
+            f"Using RSA key authentication with key file: {os.getenv('SNOWFLAKE_RSA_KEY')}"
+        )
+        if os.getenv("SNOWFLAKE_RSA_KEY_PASSPHRASE"):
+            connect_args["private_key_file_pwd"] = os.getenv(
+                "SNOWFLAKE_RSA_KEY_PASSPHRASE"
+            )
+    else:
+        connect_args["password"] = password
+
+    return snowflake.connector.connect(**connect_args)

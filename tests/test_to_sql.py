@@ -67,7 +67,15 @@ def df_without_ns():
             "col_without_ns": [
                 pd.Timestamp(year=2022, month=9, day=1, hour=2, minute=34, second=56),
                 pd.NaT,
-                pd.Timestamp(year=2022, month=9, day=1, hour=2, minute=34, second=56, microsecond=123456),
+                pd.Timestamp(
+                    year=2022,
+                    month=9,
+                    day=1,
+                    hour=2,
+                    minute=34,
+                    second=56,
+                    microsecond=123456,
+                ),
             ],
         }
     )
@@ -88,7 +96,8 @@ def df_with_ns():
                     hour=2,
                     minute=34,
                     second=56,
-                    nanosecond=123456789,
+                    microsecond=123456,
+                    nanosecond=789,
                 ),
                 pd.NaT,
                 pd.Timestamp(
@@ -98,7 +107,8 @@ def df_with_ns():
                     hour=2,
                     minute=34,
                     second=57,
-                    nanosecond=123456789,
+                    microsecond=123456,
+                    nanosecond=789,
                 ),
             ],
         }

@@ -3,3 +3,6 @@ dist
 nuvolos.egg-info
 .eggs
 __pycache__
+.venv/
+.pytest_cache/
+.DS_Store
