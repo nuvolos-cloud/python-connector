@@ -19,10 +19,8 @@ setup(
     packages=find_packages(exclude=("tests", "venv")),
     include_package_data=True,
     install_requires=[
-        "pyarrow>=10.0.1",
         "keyring>=24.1.0",
-        "pandas<3.0.0",
-        "snowflake-connector-python>=3.13.2",
+        "snowflake-connector-python[pandas]>=3.13.2",
         "snowflake-sqlalchemy>=1.7.3",
         "cryptography>=44.0.0"
     ],

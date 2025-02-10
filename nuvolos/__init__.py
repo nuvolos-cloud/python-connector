@@ -37,46 +37,6 @@ def credd_from_env_vars():
         return {"username": username, "snowflake_access_token": password}
 
 
-def credd_from_odbc_ini():
-    credential_filename = os.getenv(
-        "NUVOLOS_CREDENTIAL_FILENAME", os.path.expanduser("~") + "/.odbc.ini"
-    )
-    credential_section = os.getenv("NUVOLOS_CREDENTIAL_SECTION", "nuvolos")
-    # Create engine with credentials
-    cred = ConfigParser(interpolation=None)
-    if not os.path.exists(credential_filename):
-        logger.debug(f"Credentials file {credential_filename} not found")
-        return None
-    cred.read(credential_filename)
-    if not cred.has_section(credential_section):
-        logger.debug(
-            f"Could not find section '{credential_section}' in odbc.ini file {credential_filename}. "
-            f"Please add your Nuvolos Snowflake credentials there "
-            f"(your username as 'uid' and your Snowflake access token as 'pwd')."
-        )
-    try:
-        odbc_ini = dict(cred.items(credential_section))
-    except:
-        odbc_ini = {}
-
-    if "uid" not in odbc_ini:
-        logger.debug(
-            f"Could not find option 'uid' in the '{credential_section}' "
-            f"section of odbc.ini file {credential_filename}. "
-            f"Please set it to your Nuvolos username"
-        )
-        return None
-    if "pwd" not in odbc_ini:
-        logger.debug(
-            f"Could not find option 'pwd' in the '{credential_section}' "
-            f"section of odbc.ini file {credential_filename}. "
-            f"Please set it to your Nuvolos Snowflake access token"
-        )
-        return None
-    logger.debug(f"Found username and snowflake_access_token in {credential_filename}")
-    return {"username": odbc_ini["uid"], "snowflake_access_token": odbc_ini["pwd"]}
-
-
 def credd_from_secrets():
     username_filename = os.getenv("NUVOLOS_USERNAME_FILENAME", "/secrets/username")
     snowflake_access_token_filename = os.getenv(
@@ -156,12 +116,7 @@ def dbpath_from_env_vars():
 
 def _get_connection_params(username=None, password=None, dbname=None, schemaname=None):
     if username is None and password is None:
-        credd = (
-            credd_from_secrets()
-            or credd_from_env_vars()
-            or credd_from_odbc_ini()
-            or credd_from_local()
-        )
+        credd = credd_from_secrets() or credd_from_env_vars() or credd_from_local()
         if (
             credd is None
             or credd.get("username") is None

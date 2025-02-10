@@ -269,7 +269,6 @@ def test_with_nanoseconds(df_with_ns):
             schema=os.getenv("TEST_SCHEMANAME"),
             index=False,
             if_exists="replace",
-            nanoseconds=True,
         )
     finally:
         if conn:
