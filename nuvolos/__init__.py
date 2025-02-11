@@ -2,7 +2,6 @@ import getpass
 import logging
 import os
 import re
-from configparser import ConfigParser
 from urllib.parse import quote
 
 import keyring
