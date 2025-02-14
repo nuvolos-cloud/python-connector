@@ -8,12 +8,11 @@ Installation
 
     $ pip install --upgrade nuvolos
 
-
 Connecting to Snowflake with Nuvolos Connector
-============================================
+==============================================
 
 1. Using SQLAlchemy with Username/Password
-----------------------------------------
+------------------------------------------
 
 .. code-block:: python
 
@@ -28,7 +27,7 @@ Connecting to Snowflake with Nuvolos Connector
     )
 
 2. Using SQLAlchemy with RSA Key
--------------------------------
+--------------------------------
 
 .. code-block:: python
 
@@ -46,7 +45,7 @@ Connecting to Snowflake with Nuvolos Connector
     )
 
 3. Using Raw Connector with Username/Password
-------------------------------------------
+---------------------------------------------
 
 .. code-block:: python
 
@@ -61,7 +60,7 @@ Connecting to Snowflake with Nuvolos Connector
     )
 
 4. Using Raw Connector with RSA Key
---------------------------------
+-----------------------------------
 
 .. code-block:: python
 
