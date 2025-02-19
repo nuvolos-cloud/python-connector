@@ -14,7 +14,7 @@ from .sql_utils import to_sql
 
 logger = logging.getLogger(__name__)
 
-__NUVOLOS_KEY_PATH = "/secrets/SNOWFLAKE_RSA_KEY"
+__NUVOLOS_KEY_PATH = "/secrets/snowflake_rsa_private_key"
 __NUVOLOS_PATH = "/secrets"
 
 
