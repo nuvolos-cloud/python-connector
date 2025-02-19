@@ -14,6 +14,9 @@ from .sql_utils import to_sql
 
 logger = logging.getLogger(__name__)
 
+__NUVOLOS_KEY_PATH = "/secrets/SNOWFLAKE_RSA_KEY"
+__NUVOLOS_PATH = "/secrets"
+
 
 def load_env_var(env_var_name, description, print_value=False):
     var = os.getenv(env_var_name)
@@ -45,16 +48,24 @@ def credd_from_secrets():
     if not os.path.exists(username_filename):
         logger.debug(f"Could not find secret file {username_filename}")
         return None
-    if not os.path.exists(snowflake_access_token_filename):
+    if not os.path.exists(snowflake_access_token_filename) and not _is_key_pair_auth():
         logger.debug(f"Could not find secret file {snowflake_access_token_filename}")
         return None
-    with open(username_filename) as username, open(
-        snowflake_access_token_filename
-    ) as access_token:
-        username = username.readline()
-        password = access_token.readline()
-        logger.debug("Found username and Snowflake access token in /secrets files")
-        return {"username": username, "snowflake_access_token": password}
+    if _is_key_pair_auth():
+        with open(username_filename) as username, open(
+            snowflake_access_token_filename
+        ) as access_token:
+            username = username.readline()
+            logger.debug("Found username in /secrets file")
+            return {"username": username, "snowflake_access_token": None}
+    else:
+        with open(username_filename) as username, open(
+            snowflake_access_token_filename
+        ) as access_token:
+            username = username.readline()
+            password = access_token.readline()
+            logger.debug("Found username and Snowflake access token in /secrets files")
+            return {"username": username, "snowflake_access_token": password}
 
 
 def input_nuvolos_credential():
@@ -62,14 +73,17 @@ def input_nuvolos_credential():
     username = getpass.getpass("Please input your Nuvolos username:")
     keyring.set_password("nuvolos", "username", username)
 
-    password = getpass.getpass("Please input your Nuvolos password:")
-    keyring.set_password("nuvolos", username, password)
+    if not _is_key_pair_auth():
+        password = getpass.getpass("Please input your Nuvolos password:")
+        keyring.set_password("nuvolos", username, password)
 
 
 def credd_from_local():
     # retrieve username & password
     username = keyring.get_password("nuvolos", "username")
-    password = keyring.get_password("nuvolos", username) if username else None
+    password = None
+    if not _is_key_pair_auth():
+        password = keyring.get_password("nuvolos", username) if username else None
     return {"username": username, "snowflake_access_token": password}
 
 
@@ -113,6 +127,23 @@ def dbpath_from_env_vars():
     return {"db_name": db_name, "schema_name": schema_name}
 
 
+def _is_key_pair_auth() -> bool:
+    private_key_path = os.getenv("SNOWFLAKE_RSA_KEY", __NUVOLOS_KEY_PATH)
+    if __NUVOLOS_KEY_PATH == private_key_path:
+        if os.path.exists(__NUVOLOS_PATH):
+            # We assume that the user is running on Nuvolos
+            if not os.path.exists(__NUVOLOS_KEY_PATH):
+                raise FileNotFoundError(
+                    f"Private key file for database connection [{__NUVOLOS_KEY_PATH}] not found."
+                )
+            else:
+                return True
+        else:
+            # If the path does not exist, we assume that the user is not running on Nuvolos
+            return False
+    return os.path.exists(private_key_path)
+
+
 def _get_connection_params(username=None, password=None, dbname=None, schemaname=None):
     if username is None and password is None:
         credd = credd_from_secrets() or credd_from_env_vars() or credd_from_local()
@@ -126,11 +157,7 @@ def _get_connection_params(username=None, password=None, dbname=None, schemaname
 
         username = credd["username"]
         password = credd["snowflake_access_token"]
-    elif (
-        username is not None
-        and password is None
-        and "SNOWFLAKE_RSA_KEY" not in os.environ
-    ):
+    elif username is not None and password is None and not _is_key_pair_auth():
         raise ValueError(
             "You have provided a username but not a password. "
             "Please provite a password or set the SNOWFLAKE_RSA_KEY environment variable."
@@ -195,9 +222,7 @@ def get_url(username=None, password=None, dbname=None, schemaname=None) -> URL:
     )
 
     # Add RSA key authentication if configured
-    private_key_path = os.getenv("SNOWFLAKE_RSA_KEY")
-    if private_key_path is not None:
-        logger.debug(f"Using RSA key authentication with key file: {private_key_path}")
+    if _is_key_pair_auth():
         masked_url = f"snowflake://{quote(username)}:'RSA_KEY'@{snowflake_host}"
     else:
         masked_url = f"snowflake://{quote(username)}:'********'@{snowflake_host}"
@@ -250,16 +275,12 @@ def get_engine(username=None, password=None, dbname=None, schemaname=None):
         "VALIDATEDEFAULTPARAMETERS": True,
     }
 
-    private_key_path = os.getenv("SNOWFLAKE_RSA_KEY")
-    if private_key_path is not None:
+    if _is_key_pair_auth():
+        private_key_path = os.getenv("SNOWFLAKE_RSA_KEY", __NUVOLOS_KEY_PATH)
         from cryptography.hazmat.backends import default_backend
         from cryptography.hazmat.primitives.asymmetric import rsa
         from cryptography.hazmat.primitives.asymmetric import dsa
         from cryptography.hazmat.primitives import serialization
-
-        # Check if the private key file exists
-        if not os.path.exists(private_key_path):
-            raise FileNotFoundError(f"Private key file {private_key_path} not found")
 
         password = os.getenv("SNOWFLAKE_RSA_KEY_PASSPHRASE", None)
         with open(private_key_path, "rb") as key:
