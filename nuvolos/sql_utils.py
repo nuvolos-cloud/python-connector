@@ -10,6 +10,7 @@ from tempfile import TemporaryDirectory
 import pandas._libs.lib as lib
 from snowflake.connector.errors import ProgrammingError
 from sqlalchemy.engine import Connection
+from sqlalchemy import text
 
 from typing import TypeVar, Iterator, Tuple, Sequence
 
@@ -194,7 +195,9 @@ def _get_column_names_and_types(index, frame, dtype_mapper):
     return column_names_and_types
 
 
-def _get_create_table_statement(table, index, frame, database=None, schema=None):
+def _get_create_table_statement(
+    table, index, frame, database=None, schema=None
+) -> text:
     """
     Returns a CREATE TABLE statement for the table to which the DataFrame will be loaded.
     :param table: The name of the table which will be created.
@@ -211,7 +214,7 @@ def _get_create_table_statement(table, index, frame, database=None, schema=None)
     for col_name, col_type, is_index in column_names_and_types:
         col_defs.append(f"  {_quote_name(col_name)} {col_type}")
     qualified_name = _qualify_name(database, schema, table)
-    return (
+    return text(
         f"CREATE OR REPLACE TABLE {qualified_name} (\n" + ",\n".join(col_defs) + "\n);"
     )
 
@@ -262,7 +265,7 @@ def _ensure_table_exists(
 
     table_exists = False
     logger.info(f"Checking if table [{table}] exists in [{database}].[{schema}]")
-    result = con.execute(f"SHOW TERSE TABLES{qualified_name};")
+    result = con.execute(text(f"SHOW TERSE TABLES{qualified_name};"))
     for row in result:
         if name_to_search == row[1]:
             logger.info(f"Table [{table}] already exists in [{database}].[{schema}]")
@@ -353,10 +356,12 @@ def to_sql(
                 stage_name = "".join(
                     random.choice(string.ascii_lowercase) for _ in range(5)
                 )
-                create_stage_sql = (
-                    "CREATE TEMPORARY STAGE /* Python:nuvolos.to_sql() */ "
-                    '"{stage_name}"'
-                ).format(stage_name=stage_name)
+                create_stage_sql = text(
+                    (
+                        "CREATE TEMPORARY STAGE /* Python:nuvolos.to_sql() */ "
+                        '"{stage_name}"'
+                    ).format(stage_name=stage_name)
+                )
                 logger.debug(
                     "Creating temporary stage with '{}'".format(create_stage_sql)
                 )
@@ -381,13 +386,15 @@ def to_sql(
                     version="2.6",
                 )
                 # Upload parquet file
-                upload_sql = (
-                    "PUT /* Python:nuvolos.to_sql() */ "
-                    "'file://{path}' @\"{stage_name}\" PARALLEL={parallel}"
-                ).format(
-                    path=chunk_path.replace("\\", "\\\\").replace("'", "\\'"),
-                    stage_name=stage_name,
-                    parallel=4,
+                upload_sql = text(
+                    (
+                        "PUT /* Python:nuvolos.to_sql() */ "
+                        "'file://{path}' @\"{stage_name}\" PARALLEL={parallel}"
+                    ).format(
+                        path=chunk_path.replace("\\", "\\\\").replace("'", "\\'"),
+                        stage_name=stage_name,
+                        parallel=4,
+                    )
                 )
                 logger.debug("Uploading Parquet files with '{}'".format(upload_sql))
                 con.execute(upload_sql)
@@ -422,19 +429,21 @@ def to_sql(
 
         # in Snowflake, all parquet data is stored in a single column, $1, so we must select columns explicitly
         # see (https://docs.snowflake.com/en/user-guide/script-data-load-transform-parquet.html)
-        copy_into_sql = (
-            "COPY INTO {location} /* Python:nuvolos.to_sql() */ "
-            "({columns}) "
-            'FROM (SELECT {parquet_columns} FROM @"{stage_name}") '
-            "FILE_FORMAT=(TYPE=PARQUET COMPRESSION={compression}) "
-            "PURGE=TRUE ON_ERROR={on_error}"
-        ).format(
-            location=_qualify_name(database=database, schema=schema, table=name),
-            columns=db_columns,
-            parquet_columns=parquet_columns,
-            stage_name=stage_name,
-            compression="Snappy",
-            on_error="ABORT_STATEMENT",
+        copy_into_sql = text(
+            (
+                "COPY INTO {location} /* Python:nuvolos.to_sql() */ "
+                "({columns}) "
+                'FROM (SELECT {parquet_columns} FROM @"{stage_name}") '
+                "FILE_FORMAT=(TYPE=PARQUET COMPRESSION={compression}) "
+                "PURGE=TRUE ON_ERROR={on_error}"
+            ).format(
+                location=_qualify_name(database=database, schema=schema, table=name),
+                columns=db_columns,
+                parquet_columns=parquet_columns,
+                stage_name=stage_name,
+                compression="Snappy",
+                on_error="ABORT_STATEMENT",
+            )
         )
         logger.debug("Copying into table with '{}'".format(copy_into_sql))
         copy_results = con.execute(copy_into_sql).fetchall()
