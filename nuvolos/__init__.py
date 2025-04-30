@@ -2,14 +2,14 @@ import getpass
 import logging
 import os
 import re
-from urllib.parse import quote
+from urllib.parse import quote_plus
 
 import keyring
 import snowflake.connector
 from snowflake.sqlalchemy import URL
 from sqlalchemy import create_engine
 from .version import __version__
-from .sql_utils import to_sql
+from .sql_utils import to_sql, _quote_name
 
 
 logger = logging.getLogger(__name__)
@@ -116,7 +116,10 @@ def dbpath_from_file(path_filename):
         logger.debug(
             f"Found database = {db_name}, schema = {schema_name} in dbpath file {path_filename}."
         )
-        return {"db_name": db_name, "schema_name": schema_name}
+        return {
+            "db_name": _quote_name(db_name),
+            "schema_name": _quote_name(schema_name),
+        }
 
 
 def dbpath_from_env_vars():
@@ -124,7 +127,7 @@ def dbpath_from_env_vars():
     schema_name = load_env_var("NUVOLOS_SCHEMA", "Snowflake schema", print_value=True)
     if db_name is None or schema_name is None:
         return None
-    return {"db_name": db_name, "schema_name": schema_name}
+    return {"db_name": _quote_name(db_name), "schema_name": _quote_name(schema_name)}
 
 
 def _is_key_pair_auth() -> bool:
@@ -223,16 +226,16 @@ def get_url(username=None, password=None, dbname=None, schemaname=None) -> URL:
 
     # Add RSA key authentication if configured
     if _is_key_pair_auth():
-        masked_url = f"snowflake://{quote(username)}:'RSA_KEY'@{snowflake_host}"
+        masked_url = f"snowflake://{quote_plus(username)}:'RSA_KEY'@{snowflake_host}"
     else:
-        masked_url = f"snowflake://{quote(username)}:'********'@{snowflake_host}"
+        masked_url = f"snowflake://{quote_plus(username)}:'********'@{snowflake_host}"
 
     params = (
         "/?database=%22"
-        + quote(db_name)
+        + quote_plus(db_name)
         + "%22"
         + "&schema=%22"
-        + quote(schema_name)
+        + quote_plus(schema_name)
         + "%22"
         + "&CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX=TRUE"
         + "&VALIDATEDEFAULTPARAMETERS=TRUE"
@@ -248,6 +251,8 @@ def get_url(username=None, password=None, dbname=None, schemaname=None) -> URL:
             database=db_name,
             schema=schema_name,
             numpy=True,
+            CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX=True,
+            VALIDATEDEFAULTPARAMETERS=True,
         )
     else:
         return URL(
@@ -256,6 +261,8 @@ def get_url(username=None, password=None, dbname=None, schemaname=None) -> URL:
             database=db_name,
             schema=schema_name,
             numpy=True,
+            CLIENT_METADATA_REQUEST_USE_CONNECTION_CTX=True,
+            VALIDATEDEFAULTPARAMETERS=True,
         )
 
 
@@ -338,8 +345,10 @@ def get_raw_connection(username=None, password=None, dbname=None, schemaname=Non
         },
     }
 
-    if os.getenv("SNOWFLAKE_RSA_KEY"):
-        connect_args["private_key_file"] = os.getenv("SNOWFLAKE_RSA_KEY")
+    if _is_key_pair_auth():
+        connect_args["private_key_file"] = os.getenv(
+            "SNOWFLAKE_RSA_KEY", __NUVOLOS_KEY_PATH
+        )
         logger.debug(
             f"Using RSA key authentication with key file: {os.getenv('SNOWFLAKE_RSA_KEY')}"
         )
