@@ -150,7 +150,7 @@ def _get_connection_params(username=None, password=None, dbname=None, schemaname
         if (
             credd is None
             or credd.get("username") is None
-            or credd.get("snowflake_access_token") is None
+            or (credd.get("snowflake_access_token") is None and not _is_key_pair_auth())
         ):
             input_nuvolos_credential()
             credd = credd_from_local()
