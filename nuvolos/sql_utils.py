@@ -1,6 +1,7 @@
 """
 Utility functions to load Pandas DataFrames to Nuvolos/Snowflake.
 """
+
 import os
 import random
 import string
@@ -18,7 +19,6 @@ from pandas.core.api import (
     DataFrame,
     Series,
 )
-
 
 logger = logging.getLogger(__name__)
 RESERVED_WORDS = frozenset(
@@ -193,6 +193,64 @@ def _get_column_names_and_types(index, frame, dtype_mapper):
     ]
     logger.debug(f"Snowflake types assigned to pandas dtypes: {column_names_and_types}")
     return column_names_and_types
+
+
+def _get_timestamp_scale(col) -> int:
+    """
+    Returns the scale (0 for s, 3 for ms, 6 for us, 9 for ns) for datetime columns.
+    Defaults to 9 (nanoseconds) if unable to determine.
+    """
+    try:
+        unit = None
+        # Check if the series/index has a unit property (pandas 2.0+)
+        if hasattr(col, "dtype") and hasattr(col.dtype, "unit"):
+            unit = col.dtype.unit
+
+        # If the unit is not directly accessible, check the string representation
+        if not unit and hasattr(col, "dtype"):
+            dtype_str = str(col.dtype)
+            if "datetime64[" in dtype_str:
+                # e.g., datetime64[ns], datetime64[us], datetime64[ms], datetime64[s]
+                match = re.search(r"datetime64\[([^\]]+)\]", dtype_str)
+                if match:
+                    unit = match.group(1)
+
+        if unit == "s":
+            return 0
+        elif unit == "ms":
+            return 3
+        elif unit == "us":
+            return 6
+        elif unit == "ns":
+            return 9
+    except Exception as e:
+        logger.debug(f"Failed to determine timestamp scale, defaulting to 9: {e}")
+    return 9
+
+
+def _get_column_names_types_and_scales(index, frame, dtype_mapper):
+    column_names_types_and_scales = []
+    if index is not None:
+        for i, idx_label in enumerate(index):
+            idx_series = frame.index._get_level_values(i)
+            idx_type = dtype_mapper(idx_series)
+            scale = _get_timestamp_scale(idx_series)
+            column_names_types_and_scales.append(
+                (str(idx_label), idx_type, True, scale)
+            )
+
+    for i in range(len(frame.columns)):
+        col_series = frame.iloc[:, i]
+        col_type = dtype_mapper(col_series)
+        scale = _get_timestamp_scale(col_series)
+        column_names_types_and_scales.append(
+            (str(frame.columns[i]), col_type, False, scale)
+        )
+
+    logger.debug(
+        f"Snowflake types and scales assigned to pandas dtypes: {column_names_types_and_scales}"
+    )
+    return column_names_types_and_scales
 
 
 def _get_create_table_statement(
@@ -403,27 +461,17 @@ def to_sql(
 
         db_columns = []
         parquet_columns = []
-        column_names_and_types = _get_column_names_and_types(
+        column_info = _get_column_names_types_and_scales(
             index=indices, frame=df, dtype_mapper=_get_col_db_type
         )
-        scale = 9
-        for col_name, col_type, is_index in column_names_and_types:
-            if is_index and indices is not None:
-                db_columns.append(_quote_name(col_name))
-                if col_type.startswith("TIMESTAMP"):
-                    parquet_columns.append(
-                        f"TO_TIMESTAMP($1:{_quote_name(col_name)}::INT,{scale})"
-                    )
-                else:
-                    parquet_columns.append(f"$1:{_quote_name(col_name)}")
+        for col_name, col_type, _, scale in column_info:
+            db_columns.append(_quote_name(col_name))
+            if col_type.startswith("TIMESTAMP"):
+                parquet_columns.append(
+                    f"TO_TIMESTAMP($1:{_quote_name(col_name)}::INT,{scale})"
+                )
             else:
-                db_columns.append(_quote_name(col_name))
-                if col_type.startswith("TIMESTAMP"):
-                    parquet_columns.append(
-                        f"TO_TIMESTAMP($1:{_quote_name(col_name)}::INT,{scale})"
-                    )
-                else:
-                    parquet_columns.append(f"$1:{_quote_name(col_name)}")
+                parquet_columns.append(f"$1:{_quote_name(col_name)}")
         db_columns = ",".join(db_columns)
         parquet_columns = ",".join(parquet_columns)
 
