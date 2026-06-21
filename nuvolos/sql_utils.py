@@ -464,7 +464,7 @@ def to_sql(
         column_info = _get_column_names_types_and_scales(
             index=indices, frame=df, dtype_mapper=_get_col_db_type
         )
-        for col_name, col_type, is_index, scale in column_info:
+        for col_name, col_type, _, scale in column_info:
             db_columns.append(_quote_name(col_name))
             if col_type.startswith("TIMESTAMP"):
                 parquet_columns.append(

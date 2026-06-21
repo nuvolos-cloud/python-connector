@@ -52,10 +52,7 @@ def credd_from_secrets():
         logger.debug(f"Could not find secret file {snowflake_access_token_filename}")
         return None
     if _is_key_pair_auth():
-        with (
-            open(username_filename) as username,
-            open(snowflake_access_token_filename) as access_token,
-        ):
+        with open(username_filename) as username:
             username = username.readline()
             logger.debug("Found username in /secrets file")
             return {"username": username, "snowflake_access_token": None}
