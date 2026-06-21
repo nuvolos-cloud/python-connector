@@ -2,6 +2,7 @@ import getpass
 import logging
 import os
 import re
+import sys
 from urllib.parse import quote_plus
 
 import keyring
@@ -10,7 +11,6 @@ from snowflake.sqlalchemy import URL
 from sqlalchemy import create_engine
 from .version import __version__
 from .sql_utils import to_sql, _quote_name
-
 
 logger = logging.getLogger(__name__)
 
@@ -52,16 +52,18 @@ def credd_from_secrets():
         logger.debug(f"Could not find secret file {snowflake_access_token_filename}")
         return None
     if _is_key_pair_auth():
-        with open(username_filename) as username, open(
-            snowflake_access_token_filename
-        ) as access_token:
+        with (
+            open(username_filename) as username,
+            open(snowflake_access_token_filename) as access_token,
+        ):
             username = username.readline()
             logger.debug("Found username in /secrets file")
             return {"username": username, "snowflake_access_token": None}
     else:
-        with open(username_filename) as username, open(
-            snowflake_access_token_filename
-        ) as access_token:
+        with (
+            open(username_filename) as username,
+            open(snowflake_access_token_filename) as access_token,
+        ):
             username = username.readline()
             password = access_token.readline()
             logger.debug("Found username and Snowflake access token in /secrets files")
@@ -69,6 +71,13 @@ def credd_from_secrets():
 
 
 def input_nuvolos_credential():
+    if not (sys.stdin and sys.stdin.isatty()):
+        raise ValueError(
+            "Cannot prompt for credentials in a non-interactive environment. "
+            "Please configure Nuvolos credentials via environment variables (NUVOLOS_USERNAME, NUVOLOS_SF_TOKEN) "
+            "or secrets files."
+        )
+
     # store username & password
     username = getpass.getpass("Please input your Nuvolos username:")
     keyring.set_password("nuvolos", "username", username)
