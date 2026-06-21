@@ -123,9 +123,9 @@ def test_case_insensitive(df_case_insensitive):
     try:
         conn = get_connection(
             username=os.getenv("TEST_USERNAME"),
-            password=os.getenv("TEST_PASSWORD"),
             dbname=os.getenv("TEST_DBNAME"),
             schemaname=os.getenv("TEST_SCHEMANAME"),
+            private_key_file=os.getenv("PRIVATE_KEY_FILE"),
         )
         to_sql(
             df=df_case_insensitive,
@@ -149,9 +149,9 @@ def test_case_sensitive(df_case_sensitive):
     try:
         conn = get_connection(
             username=os.getenv("TEST_USERNAME"),
-            password=os.getenv("TEST_PASSWORD"),
             dbname=os.getenv("TEST_DBNAME"),
             schemaname=os.getenv("TEST_SCHEMANAME"),
+            private_key_file=os.getenv("PRIVATE_KEY_FILE"),
         )
         to_sql(
             df=df_case_sensitive,
@@ -183,9 +183,9 @@ def test_check_transaction(df_case_insensitive):
     try:
         conn = get_connection(
             username=os.getenv("TEST_USERNAME"),
-            password=os.getenv("TEST_PASSWORD"),
             dbname=os.getenv("TEST_DBNAME"),
             schemaname=os.getenv("TEST_SCHEMANAME"),
+            private_key_file=os.getenv("PRIVATE_KEY_FILE"),
         )
         to_sql(
             df=df_case_insensitive,
@@ -203,9 +203,9 @@ def test_check_transaction(df_case_insensitive):
     try:
         conn2 = get_connection(
             username=os.getenv("TEST_USERNAME"),
-            password=os.getenv("TEST_PASSWORD"),
             dbname=os.getenv("TEST_DBNAME"),
             schemaname=os.getenv("TEST_SCHEMANAME"),
+            private_key_file=os.getenv("PRIVATE_KEY_FILE"),
         )
         df_r = pd.read_sql("SELECT * FROM check_transaction;", con=conn2)
         df_c = df_case_insensitive.compare(df_r)
@@ -220,9 +220,9 @@ def test_without_nanoseconds(df_without_ns):
     try:
         conn = get_connection(
             username=os.getenv("TEST_USERNAME"),
-            password=os.getenv("TEST_PASSWORD"),
             dbname=os.getenv("TEST_DBNAME"),
             schemaname=os.getenv("TEST_SCHEMANAME"),
+            private_key_file=os.getenv("PRIVATE_KEY_FILE"),
         )
         to_sql(
             df=df_without_ns,
@@ -240,9 +240,9 @@ def test_without_nanoseconds(df_without_ns):
     try:
         conn2 = get_connection(
             username=os.getenv("TEST_USERNAME"),
-            password=os.getenv("TEST_PASSWORD"),
             dbname=os.getenv("TEST_DBNAME"),
             schemaname=os.getenv("TEST_SCHEMANAME"),
+            private_key_file=os.getenv("PRIVATE_KEY_FILE"),
         )
         df_r = pd.read_sql("SELECT * FROM without_ns;", con=conn2)
         df_c = df_without_ns.compare(df_r)
@@ -257,9 +257,9 @@ def test_with_nanoseconds(df_with_ns):
     try:
         conn = get_connection(
             username=os.getenv("TEST_USERNAME"),
-            password=os.getenv("TEST_PASSWORD"),
             dbname=os.getenv("TEST_DBNAME"),
             schemaname=os.getenv("TEST_SCHEMANAME"),
+            private_key_file=os.getenv("PRIVATE_KEY_FILE"),
         )
         to_sql(
             df=df_with_ns,
@@ -277,9 +277,9 @@ def test_with_nanoseconds(df_with_ns):
     try:
         conn2 = get_connection(
             username=os.getenv("TEST_USERNAME"),
-            password=os.getenv("TEST_PASSWORD"),
             dbname=os.getenv("TEST_DBNAME"),
             schemaname=os.getenv("TEST_SCHEMANAME"),
+            private_key_file=os.getenv("PRIVATE_KEY_FILE"),
         )
         df_r = pd.read_sql("SELECT * FROM with_ns;", con=conn2)
         df_c = df_with_ns.compare(df_r)
